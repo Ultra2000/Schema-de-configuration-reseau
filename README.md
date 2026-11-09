@@ -2,6 +2,13 @@
 
 **GROUPE: SWEAT-POTATO**
 
+**Membres :**
+- _Ludolphe SAGBO_
+- Fréjus BOURAIMA
+- _Rayan Boudjemai_
+- _Amsétou DIARRA_
+
+
 Conception du projet
 
 ## Partie 1: noyau minimal et fonctionnalité
@@ -157,9 +164,8 @@ Ces modules sont fournis avec Python : aucune installation, compatibles Windows 
     * **Maintenance, communauté, documentation** : projet actif et reconnu dans le domaine de la sécurité réseau, documentation correcte.
     * Non retenu pour l'instant à cause des droits administrateur ; pourra remplacer le ping si le temps le permet.
 5. **pytest** (alternative à unittest) : écriture de tests plus courte et rapports plus lisibles. Installation via pip install pytest, projet très utilisé et bien documenté. Non indispensable au fonctionnement du programme.
-    * tests
-**Choix retenus :** NetworkX pour l'analyse de la topologie et graphviz pour le rendu, ce qui sépare l'analyse du réseau de sa représentation graphique. Pour la découverte locale, psutil pour les interfaces et les commandes système pour les routes et la table ARP.
 
+**Choix retenus :** NetworkX pour l'analyse de la topologie et graphviz pour le rendu, ce qui sépare l'analyse du réseau de sa représentation graphique. Pour la découverte locale, psutil pour les interfaces et les commandes système pour les routes et la table ARP.
 
 
 ### Outils indépendants qui seront appelés par le programme
