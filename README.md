@@ -10,11 +10,22 @@
 
 
 Conception du projet
+Le programme génère automatiquement le schéma d'une infrastructure réseau à partir d'un **fichier de configuration** qui décrit toutes ses machines : nom, type, interfaces réseau avec adresses IP et masques, table de routage et liaisons physiques. Il n'y a pas de saisie manuelle : l'utilisateur fournit le fichier, le programme le valide, déduit les liaisons entre machines, puis exporte le schéma sous forme d'image.
+ 
+En fonctionnalité supplémentaire, le programme pourra aussi **découvrir le réseau local** sur lequel il est lancé et en produire le schéma sans fichier de configuration.
+ 
+Priorités utilisées :
+ 
+- **P1** : indispensable pour une application minimale fonctionnelle, c'est-à-dire lire le fichier de configuration et produire l'image du réseau ;
+- **P2** : compléments utiles, réalisées si le temps le permet ;
+- **P3** : fonctionnalités avancées qui permettraient d'avoir une application plus complète.
+
+--- 
 
 ## Partie 1: noyau minimal et fonctionnalité
 
-1. Permettre de créer un réseau et d'y ajouter des machines.
-2. **Format du fichier de configuration** :
+1. Permettre de créer un réseau et d'y ajouter des machines. - **P1**
+2. **Format du fichier de configuration** - **P1**
     * un fichier JSON unique décrit tout le réseau dont on veut le schéma (format détaillé plus bas) ;
     * types de machines autorisés : PC, serveur, routeur, switch ;
     * masque accepté sous les deux notations (/24 ou 255.255.255.0) ;
@@ -22,46 +33,47 @@ Conception du projet
     * liaisons physiques facultatives ;
     * fichier d'exemple fourni dans examples/ ;
     * dépend de #1
-3. **Chargement du fichier de configuration** :
+3. **Chargement du fichier de configuration** - **P1**
     * lecture du fichier JSON ;
     * création des machines avec leur nom et leur type ;
     * création des interfaces, avec conversion du masque en une forme unique ;
     * création des routes et des liaisons ;
     * message clair si le fichier est introuvable, mal formé ou s'il manque un champ obligatoire ;
     * dépend de #1, #2
-4. **Validation des données** :
-    * adresse IP et masque syntaxiquement valides ;
-    * l'adresse n'est ni l'adresse réseau ni l'adresse de broadcast du sous-réseau ;
-    * noms de machines et d'interfaces uniques ;
-    * type de machine reconnu ;
-    * l'interface de sortie d'une route existe sur la machine ;
-    * la passerelle d'une route est joignable directement par l'interface indiquée ;
-    * les deux extrémités d'une liaison existent ;
+4. **Validation des données**
+    * adresse IP et masque syntaxiquement valides ; - **P1**
+    * l'adresse n'est ni l'adresse réseau ni l'adresse de broadcast du sous-réseau ; - **P1**
+    * noms de machines et d'interfaces uniques ; - **P1**
+    * type de machine reconnu ; - **P1**
+    * l'interface de sortie d'une route existe sur la machine ; - **P2**
+    * la passerelle d'une route est joignable directement par l'interface indiquée ; **P2**
+    * les deux extrémités d'une liaison existent ; - **P2**
     * dépend de #3
-5. **Analyse de topologie** :
+5. **Analyse de topologie** - **P2**
     * calcul du sous-réseau de chaque interface à partir de son adresse et de son masque ;
     * regroupement des interfaces appartenant au même sous-réseau (liaisons déduites) ;
     * prise en compte des liaisons déclarées dans le fichier ;
     * repérage des routeurs comme points de passage entre sous-réseaux ;
     * dépend de #4
-6. **Génération du schéma graphique** du réseau :
+6. **Génération du schéma graphique** du réseau - **P1**
     * un nœud par machine, avec une forme différente selon le type ;
     * un nœud par sous-réseau (ex. 192.168.1.0/24) ;
-    * une liaison entre chaque machine et son sous-réseau, étiquetée avec le nom de l'interface et l'adresse IP ;
+    * une liaison entre chaque machine et son sous-réseau, 
+    * étiquetée avec le nom de l'interface et l'adresse IP ;
     * disposition automatique des éléments ;
     * dépend de #5
-7. **Export du schéma** :
+7. **Export du schéma** - **P1**
     * formats PNG et SVG, PDF ;
     * choix du nom et de l'emplacement du fichier de sortie ;
     * dépend de #6
-8. **Interface en ligne de commande** :
+8. **Interface en ligne de commande** : - **P1**
     * lancement avec un fichier de configuration et un fichier de sortie (python main.py examples/reseau_exemple.json -o schema.svg) ;
     * enchaînement chargement → validation → analyse → génération → export ;
     * affichage des erreurs de validation et arrêt si la configuration est invalide ;
     * dépend de #3, #4, #7
 
 
-Comme fonctionnalités supplémentaires, on pourra considérer: 
+Comme fonctionnalités supplémentaires, on pourra considérer:  - **P2**
 
 9. **Détecter les conflits d'adresses IP** (même adresse sur deux interfaces).
     * modifier #4 pour ajouter un contrôle sur l'ensemble de la configuration
@@ -82,7 +94,7 @@ Comme fonctionnalités supplémentaires, on pourra considérer:
     * modifier #6 pour ajouter une infobulle à chaque machine
     * modifier #7 pour que cette infobulle soit conservée dans le SVG
     * dépend de #6, #7
-14. **Générer le schéma du réseau local** sur lequel l'application est lancée. 
+14. **Générer le schéma du réseau local** sur lequel l'application est lancée. - **P3**
     * découverte de la machine locale : interfaces, adresses IP, masques et table de routage ;
     * identification de la passerelle par défaut, représentée comme un routeur ;
     * découverte des autres machines du sous-réseau :
