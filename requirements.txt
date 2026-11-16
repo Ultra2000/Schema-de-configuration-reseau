@@ -1,5 +1,2 @@
 networklab==26.10 
-networkx
-graphviz
-pydantic
-pytest
+PyYAML>=6.0
