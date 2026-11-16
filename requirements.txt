@@ -1,3 +1,4 @@
+networklab==26.10 
 networkx
 graphviz
 pydantic
