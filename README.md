@@ -188,6 +188,23 @@ Ces modules sont fournis avec Python : aucune installation, compatibles Windows 
 3. **ping** : tester si une adresse du sous-réseau répond. Présent sur tous les systèmes, mais les options diffèrent entre Linux (-c) et Windows (-n), et certaines machines (pare-feu Windows notamment) ne répondent pas au ping.
     * #14
 4. **Git** : suivi des versions et travail en groupe. Outil de développement, non livré avec le programme.
+
+
+## Démarrage (partie 1)
+
+```bash
+python -m venv .venv
+.venv\Scripts\activate        # Linux : source .venv/bin/activate
+pip install -r requirements.txt
+
+mkdir build
+netlab create -o yaml:nodes=build/nodes.yml network_config.yml
+python extraire_donnees.py build/nodes.yml build/reseau.json
+```
+
+Le résultat se trouve dans `build/reseau.json`.
+
+Sous Windows, l'avertissement `[WARNING] stats` de netlab est sans conséquence.
  
 
 
