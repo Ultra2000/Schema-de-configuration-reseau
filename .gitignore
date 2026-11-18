@@ -1,0 +1,6 @@
+*.png
+*.docx
+~*
+*.tmp
+/.venv/
+/build/
