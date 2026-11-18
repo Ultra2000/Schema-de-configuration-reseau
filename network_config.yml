@@ -1,0 +1,36 @@
+provider: clab
+defaults.device: linux
+
+nodes:
+  pc1:
+    role: host                 
+    module: [ routing ]         
+    routing.static:
+    - ipv4: 0.0.0.0/0          
+      nexthop.ipv4: 192.168.1.1 
+
+  pc2:
+    role: host
+    module: [ routing ]
+    routing.static:
+    - ipv4: 0.0.0.0/0
+      nexthop.ipv4: 10.0.0.1   
+
+  router1:
+    device: frr                 
+    loopback: False             
+
+links:
+- pc1:
+    ifname: eth0
+    ipv4: 192.168.1.10/24
+  router1:
+    ifname: eth0
+    ipv4: 192.168.1.1/24
+
+- pc2:
+    ifname: eth0
+    ipv4: 10.0.0.20/24
+  router1:
+    ifname: eth1
+    ipv4: 10.0.0.1/24
