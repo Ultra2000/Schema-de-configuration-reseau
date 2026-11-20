@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96" width="96" height="96">
+  <!-- cylindre -->
+  <path d="M8 40 V60 A40 15 0 0 0 88 60 V40 Z" fill="#B85A00"/>
+  <ellipse cx="48" cy="40" rx="40" ry="15" fill="#F08A24"/>
+  <!-- flèches : deux vers l'extérieur, deux vers l'intérieur -->
+  <g fill="#FFFFFF">
+    <path d="M40 38 H24 V34 L16 40 L24 46 V42 H40 Z"/>
+    <path d="M56 38 H72 V34 L80 40 L72 46 V42 H56 Z"/>
+    <path d="M46 26 V31 H42 L48 36 L54 31 H50 V26 Z"/>
+    <path d="M46 54 V49 H42 L48 44 L54 49 H50 V54 Z"/>
+  </g>
+</svg>

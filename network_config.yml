@@ -1,36 +1,77 @@
+# Réseau d'une PME : un LAN employés, une DMZ avec deux serveurs, un accès Internet.
+#
+#   LAN employés  192.168.1.0/24   : pc-compta, pc-direction  -- sw-lan -- r-pme (eth0)
+#   DMZ           192.168.100.0/24 : srv-web, srv-mail        -- sw-dmz -- r-pme (eth1)
+#   WAN           203.0.113.0/30   : r-pme (eth2) <-> r-fai (eth0)
+#
+# Règles suivies :
+#   - ifname sur chaque interface ;
+#   - loopback: False sur chaque routeur ;
+#   - une route par défaut déclarée sur chaque PC et chaque serveur ;
+#   - equipement: serveur sur les serveurs.
+
 provider: clab
 defaults.device: linux
+defaults.attributes.node.equipement: str
 
 nodes:
-  pc1:
-    role: host                 
-    module: [ routing ]         
-    routing.static:
-    - ipv4: 0.0.0.0/0          
-      nexthop.ipv4: 192.168.1.1 
-
-  pc2:
+  # --- LAN employés ---
+  pc-compta:
     role: host
     module: [ routing ]
-    routing.static:
-    - ipv4: 0.0.0.0/0
-      nexthop.ipv4: 10.0.0.1   
+    routing.static: [ { ipv4: 0.0.0.0/0, nexthop.ipv4: 192.168.1.1 } ]
+  pc-direction:
+    role: host
+    module: [ routing ]
+    routing.static: [ { ipv4: 0.0.0.0/0, nexthop.ipv4: 192.168.1.1 } ]
+  sw-lan:
+    role: bridge
 
-  router1:
-    device: frr                 
-    loopback: False             
+  # --- DMZ ---
+  srv-web:
+    role: host
+    equipement: serveur
+    module: [ routing ]
+    routing.static: [ { ipv4: 0.0.0.0/0, nexthop.ipv4: 192.168.100.1 } ]
+  srv-mail:
+    role: host
+    equipement: serveur
+    module: [ routing ]
+    routing.static: [ { ipv4: 0.0.0.0/0, nexthop.ipv4: 192.168.100.1 } ]
+  sw-dmz:
+    role: bridge
+
+  # --- Routeurs ---
+  r-pme:
+    device: frr
+    loopback: False
+    module: [ routing ]
+    routing.static:
+    - { ipv4: 0.0.0.0/0, nexthop.ipv4: 203.0.113.2 }        # tout le reste vers le FAI
+  r-fai:
+    device: frr
+    loopback: False
+    module: [ routing ]
+    routing.static:
+    - { ipv4: 192.168.0.0/16, nexthop.ipv4: 203.0.113.1 }   # réseaux de la PME
 
 links:
-- pc1:
-    ifname: eth0
-    ipv4: 192.168.1.10/24
-  router1:
-    ifname: eth0
-    ipv4: 192.168.1.1/24
+# LAN employés : câblé sur sw-lan
+- sw-lan: { ifname: eth1 }
+  pc-compta: { ifname: eth0, ipv4: 192.168.1.11/24 }
+- sw-lan: { ifname: eth2 }
+  pc-direction: { ifname: eth0, ipv4: 192.168.1.12/24 }
+- sw-lan: { ifname: eth3 }
+  r-pme: { ifname: eth0, ipv4: 192.168.1.1/24 }
 
-- pc2:
-    ifname: eth0
-    ipv4: 10.0.0.20/24
-  router1:
-    ifname: eth1
-    ipv4: 10.0.0.1/24
+# DMZ : câblée sur sw-dmz
+- sw-dmz: { ifname: eth1 }
+  srv-web: { ifname: eth0, ipv4: 192.168.100.10/24 }
+- sw-dmz: { ifname: eth2 }
+  srv-mail: { ifname: eth0, ipv4: 192.168.100.11/24 }
+- sw-dmz: { ifname: eth3 }
+  r-pme: { ifname: eth1, ipv4: 192.168.100.1/24 }
+
+# WAN : lien point à point vers le fournisseur d'accès
+- r-pme: { ifname: eth2, ipv4: 203.0.113.1/30 }
+  r-fai: { ifname: eth0, ipv4: 203.0.113.2/30 }

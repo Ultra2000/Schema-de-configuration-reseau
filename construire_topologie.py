@@ -1,4 +1,3 @@
-
 import json
 import sys
 import ipaddress
@@ -38,7 +37,9 @@ def creer_noeuds_machines(machines):
             "id": f"machine:{nom}",
             "type": "machine",
             "nom": nom,
-            "role": machine.get("type", "inconnu")
+            "role": machine.get("type", "inconnu"),
+
+            "routes": machine.get("routes", [])
         })
 
     return noeuds
@@ -63,8 +64,6 @@ def calculer_sous_reseaux(machines):
 
             adresse = interface.get("ip")
 
-            # Une interface sans adresse IPv4 ne permet pas
-            # de déduire un sous-réseau.
             if not adresse:
                 continue
 
@@ -77,10 +76,8 @@ def calculer_sous_reseaux(machines):
                     f"{nom_machine}/{interface.get('nom')} : {adresse}"
                 )
 
-            # Récupération du sous-réseau.
             cidr = str(interface_ip.network)
 
-            # Un seul nœud est créé par sous-réseau.
             if cidr not in sous_reseaux:
                 sous_reseaux[cidr] = {
                     "id": f"reseau:{cidr}",
@@ -119,6 +116,55 @@ def creer_connexions_logiques(associations):
     return connexions
 
 
+def creer_connexions_switchs(machines, associations):
+    """
+    Relie chaque switch au sous-réseau des machines branchées sur lui.
+
+    Un switch n'a pas d'adresse IP : il n'apparaît donc dans aucune
+    association. On retrouve son sous-réseau grâce à ses voisins.
+    Une seule connexion est créée par switch et par sous-réseau.
+    """
+
+    sous_reseau_de = {
+        (a["machine"], a["interface"]): a["sous_reseau"]
+        for a in associations
+    }
+
+    connexions = []
+
+    for nom_machine, machine in machines.items():
+
+        if machine.get("type") != "bridge":
+            continue
+
+        deja_relies = set()
+
+        for interface in machine.get("interfaces", []):
+
+            if interface.get("nom", "").startswith("vlan"):
+                continue
+
+            for voisin in interface.get("voisins", []):
+
+                nom_voisin, _, interface_voisine = voisin.rpartition(":")
+                cidr = sous_reseau_de.get((nom_voisin, interface_voisine))
+
+                if cidr is None or cidr in deja_relies:
+                    continue
+
+                deja_relies.add(cidr)
+
+                connexions.append({
+                    "source": f"machine:{nom_machine}",
+                    "cible": f"reseau:{cidr}",
+                    "type": "logique",
+                    "interface": None,
+                    "ip": None
+                })
+
+    return connexions
+
+
 def creer_connexions_physiques(machines):
     """
     Crée les connexions physiques déclarées par les voisins Netlab.
@@ -129,15 +175,29 @@ def creer_connexions_physiques(machines):
     connexions = []
     liens_vus = set()
 
+    switchs = {
+        nom for nom, machine in machines.items()
+        if machine.get("type") == "bridge"
+    }
+
     for nom_machine, machine in machines.items():
 
         for interface in machine.get("interfaces", []):
 
             nom_interface = interface.get("nom")
+            voisins = interface.get("voisins", [])
 
-            for voisin in interface.get("voisins", []):
+            if str(nom_interface).startswith("vlan"):
+                continue
 
-                # Le format attendu est : machine:interface
+            if machine.get("type") != "bridge" and any(
+                isinstance(v, str) and v.rpartition(":")[0] in switchs
+                for v in voisins
+            ):
+                continue
+
+            for voisin in voisins:
+
                 if not isinstance(voisin, str) or ":" not in voisin:
                     raise ValueError(
                         f"Voisin invalide sur "
@@ -152,13 +212,11 @@ def creer_connexions_physiques(machines):
                         f"{nom_machine}/{nom_interface} : {voisin}"
                     )
 
-                # Vérification de l'existence de la machine distante.
                 if nom_voisin not in machines:
                     raise ValueError(
                         f"Machine voisine inconnue : {nom_voisin}"
                     )
 
-                # Vérification de l'existence de l'interface distante.
                 interfaces_distantes = machines[nom_voisin].get(
                     "interfaces", []
                 )
@@ -174,12 +232,9 @@ def creer_connexions_physiques(machines):
                         f"{nom_voisin}/{interface_distante}"
                     )
 
-                # Chaque extrémité est représentée par une paire.
                 extremite_a = (nom_machine, nom_interface)
                 extremite_b = (nom_voisin, interface_distante)
 
-                # Le tri permet de reconnaître un même lien
-                # même si Netlab le déclare dans les deux sens.
                 cle_lien = tuple(sorted((extremite_a, extremite_b)))
 
                 if cle_lien in liens_vus:
@@ -187,7 +242,6 @@ def creer_connexions_physiques(machines):
 
                 liens_vus.add(cle_lien)
 
-                # On conserve le même ordre que celui de la clé.
                 source, cible = cle_lien
 
                 connexions.append({
@@ -207,16 +261,16 @@ def construire_topologie(reseau):
     """
     machines = reseau["machines"]
 
-    # Création des nœuds représentant les machines.
     noeuds = creer_noeuds_machines(machines)
 
-    # Calcul et création des nœuds représentant les sous-réseaux.
     sous_reseaux, associations = calculer_sous_reseaux(machines)
 
     noeuds.extend(sous_reseaux.values())
 
-    # Création des deux catégories de connexions.
-    connexions_logiques = creer_connexions_logiques(associations)
+    connexions_logiques = (
+        creer_connexions_logiques(associations)
+        + creer_connexions_switchs(machines, associations)
+    )
     connexions_physiques = creer_connexions_physiques(machines)
 
     connexions = connexions_logiques + connexions_physiques
@@ -245,14 +299,16 @@ def main():
     """
     Point d'entrée du programme.
     """
-    if len(sys.argv) != 2:
+    if len(sys.argv) not in (2, 3):
         print(
-            "Utilisation : python construire_topologie.py reseau.json"
+            "Utilisation : python construire_topologie.py "
+            "reseau.json [topologie.json]"
         )
         sys.exit(1)
 
     fichier_entree = sys.argv[1]
-    fichier_sortie = "topologie.json"
+
+    fichier_sortie = sys.argv[2] if len(sys.argv) == 3 else "topologie.json"
 
     try:
         reseau = lire_reseau(fichier_entree)

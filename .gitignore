@@ -1,6 +1,6 @@
-*.png
 *.docx
 ~*
 *.tmp
+*.svg
 /.venv/
 /build/

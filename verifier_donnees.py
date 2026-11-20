@@ -1,5 +1,3 @@
-
-#!/usr/bin/env python3
 """Vérifie la cohérence d'un réseau décrit dans reseau.json."""
 
 import json
