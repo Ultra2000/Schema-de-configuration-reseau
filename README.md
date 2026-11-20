@@ -207,16 +207,34 @@ Nous avons aussi étudié nwdiag, un outil qui génère directement un schéma r
 python -m venv .venv
 .venv\Scripts\activate        # Linux : source .venv/bin/activate
 pip install -r requirements.txt
-
 mkdir build
+```
+
+### Générer un schéma
+
+Le réseau à dessiner est décrit dans `network_config.yml`.
+
+```bash
 netlab create -o yaml:nodes=build/nodes.yml network_config.yml
-python extraire_donnees.py build/nodes.yml build/reseau.json
+python extraire_donnees.py build/nodes.yml build/reseau.json "Mon réseau"
+python construire_topologie.py build/reseau.json build/topologie.json
+python generer_dot.py build/topologie.json build/schema.dot
+dot -Tpng build/schema.dot -o build/schema.png
 ```
 
 Le résultat se trouve dans `build/reseau.json`.
+Le schéma se trouve dans `build/schema.png`. Pour tester d'autres réseaux : il suffit de remplacer le contenu de `network_config.yml` tout en respectant les règles d'écriture suivantes:
 
-Sous Windows, l'avertissement `[WARNING] stats` de netlab est sans conséquence.
- 
+### Règles d'écriture du fichier YAML
+
+- donner un nom à chaque interface avec `ifname` ;
+- mettre `loopback: False` sur chaque routeur ;
+- déclarer une route par défaut sur chaque PC et chaque serveur ;
+- marquer les serveurs avec `equipement: serveur` (voir `exemples/reseau_pme.yml`).
+
+
+
+
 
 
 
