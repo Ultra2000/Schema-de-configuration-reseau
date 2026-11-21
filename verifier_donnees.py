@@ -32,13 +32,13 @@ def verifier_reseau(reseau):
     """Effectue les contrôles de cohérence du réseau."""
 
     erreurs = []
+    avertissements = []
     machines = reseau["machines"]
 
     interfaces = {}
     adresses = {}
     sous_reseaux = set()
 
-    # 1. Vérification des interfaces et des adresses IP
     for nom_machine, machine in machines.items():
 
         if not isinstance(machine, dict):
@@ -66,8 +66,21 @@ def verifier_reseau(reseau):
             ip = interface.get("ip")
 
             if not ip:
+                if machine.get("type") != "bridge":
+                    avertissements.append(
+                        f"{nom_machine}:{nom_interface} : interface sans adresse IP."
+                    )
+                interfaces[nom_machine][nom_interface] = {
+                    "ip": None,
+                    "reseau": None,
+                    "donnees": interface
+                }
+                continue
+
+            if not isinstance(ip, str) or "/" not in ip:
                 erreurs.append(
-                    f"{nom_machine}:{nom_interface} : adresse IP absente."
+                    f"{nom_machine}:{nom_interface} : "
+                    f"adresse IP sans masque ou mal formée ({ip})."
                 )
                 interfaces[nom_machine][nom_interface] = {
                     "ip": None,
@@ -96,20 +109,41 @@ def verifier_reseau(reseau):
                 }
                 continue
 
-            # Vérification adresse réseau et broadcast
-            if adresse.ip == reseau_ip.network_address:
-                erreurs.append(
-                    f"{nom_machine}:{nom_interface} : "
-                    f"{ip} est une adresse réseau."
-                )
+            probleme = None
+            if adresse.ip.is_unspecified:
+                probleme = "adresse 0.0.0.0 interdite sur une interface"
+            elif adresse.ip.is_loopback:
+                probleme = "adresse de loopback interdite sur un lien"
+            elif adresse.ip.is_multicast:
+                probleme = "adresse multicast interdite sur une interface"
+            elif str(adresse.ip) == "255.255.255.255":
+                probleme = "adresse de broadcast général interdite"
 
-            if adresse.ip == reseau_ip.broadcast_address:
+            if probleme:
                 erreurs.append(
-                    f"{nom_machine}:{nom_interface} : "
-                    f"{ip} est une adresse de broadcast."
+                    f"{nom_machine}:{nom_interface} : {probleme} ({ip})."
                 )
+                interfaces[nom_machine][nom_interface] = {
+                    "ip": None,
+                    "reseau": None,
+                    "donnees": interface
+                }
+                continue
 
-            # Détection des IP dupliquées
+            if reseau_ip.prefixlen < 31:
+
+                if adresse.ip == reseau_ip.network_address:
+                    erreurs.append(
+                        f"{nom_machine}:{nom_interface} : "
+                        f"{ip} est une adresse réseau."
+                    )
+
+                if adresse.ip == reseau_ip.broadcast_address:
+                    erreurs.append(
+                        f"{nom_machine}:{nom_interface} : "
+                        f"{ip} est une adresse de broadcast."
+                    )
+
             adresse_str = str(adresse.ip)
 
             if adresse_str in adresses:
@@ -131,7 +165,6 @@ def verifier_reseau(reseau):
                 "donnees": interface
             }
 
-    # 2. Vérification des liens entre interfaces
     liens_verifies = set()
 
     for nom_machine, machine in machines.items():
@@ -196,7 +229,6 @@ def verifier_reseau(reseau):
                         f"({reseau_local} / {reseau_distant})."
                     )
 
-    # 3. Vérification des routes
     routes_par_machine = {}
 
     for nom_machine, machine in machines.items():
@@ -225,16 +257,34 @@ def verifier_reseau(reseau):
                 )
                 continue
 
+            if str(reseau_destination) != destination:
+                avertissements.append(
+                    f"{nom_machine} : route {destination} écrite avec des "
+                    f"bits d'hôte, comprise comme {reseau_destination}."
+                )
+
             routes_par_machine[nom_machine].append(
                 reseau_destination
             )
 
-            # Vérifier l'existence de l'interface de sortie
             if not nom_interface:
-                erreurs.append(
-                    f"{nom_machine} : interface de sortie "
-                    f"absente pour la route {destination}."
-                )
+                if passerelle is not None:
+                    reseaux_machine = ", ".join(
+                        str(infos["reseau"])
+                        for infos in interfaces.get(nom_machine, {}).values()
+                        if infos["reseau"] is not None
+                    ) or "aucun"
+                    erreurs.append(
+                        f"{nom_machine} : route vers {destination}, "
+                        f"passerelle {passerelle} injoignable, aucune "
+                        "interface dans son sous-réseau (réseaux de la "
+                        f"machine : {reseaux_machine})."
+                    )
+                else:
+                    erreurs.append(
+                        f"{nom_machine} : interface de sortie "
+                        f"absente pour la route {destination}."
+                    )
                 continue
 
             infos_interface = interfaces.get(
@@ -248,7 +298,6 @@ def verifier_reseau(reseau):
                 )
                 continue
 
-            # Vérifier la passerelle
             if passerelle is not None:
 
                 try:
@@ -277,10 +326,22 @@ def verifier_reseau(reseau):
                             f"{reseau_interface})."
                         )
 
-    # 4. Vérification des routes des routeurs
+                    elif ip_passerelle == infos_interface["ip"].ip:
+                        erreurs.append(
+                            f"{nom_machine}:{nom_interface} : la passerelle "
+                            f"{passerelle} est l'adresse de la machine elle-même."
+                        )
+
+                    elif str(ip_passerelle) not in adresses:
+                        erreurs.append(
+                            f"{nom_machine}:{nom_interface} : passerelle "
+                            f"{passerelle} (route vers {destination}) "
+                            "attribuée à aucune machine du réseau."
+                        )
+
     for nom_machine, machine in machines.items():
 
-        if machine.get("type") != "router":
+        if not isinstance(machine, dict) or machine.get("type") == "bridge":
             continue
 
         reseaux_directs = {
@@ -289,27 +350,34 @@ def verifier_reseau(reseau):
             if infos["reseau"] is not None
         }
 
-        for reseau in sous_reseaux:
+        if not reseaux_directs:
+            continue
 
-            # Un réseau directement connecté ne nécessite
-            # pas de route statique.
+        for reseau in sorted(sous_reseaux):
+
             if reseau in reseaux_directs:
                 continue
 
-            # Chercher une route qui couvre ce réseau.
             route_trouvee = any(
                 reseau.subnet_of(route)
                 for route in routes_par_machine[nom_machine]
             )
 
             if not route_trouvee:
-                erreurs.append(
-                    f"{nom_machine} : aucune route vers "
-                    f"le réseau {reseau} (réseau distant "
-                    "potentiellement inaccessible)."
-                )
+                if machine.get("type") == "router":
+                    erreurs.append(
+                        f"{nom_machine} : aucune route vers "
+                        f"le réseau {reseau} (réseau distant "
+                        "potentiellement inaccessible)."
+                    )
 
-    return erreurs
+                else:
+                    avertissements.append(
+                        f"{nom_machine} : aucune route vers "
+                        f"le réseau {reseau}."
+                    )
+
+    return erreurs, avertissements
 
 
 def main():
@@ -325,7 +393,13 @@ def main():
     if reseau is None:
         sys.exit(1)
 
-    erreurs = verifier_reseau(reseau)
+    erreurs, avertissements = verifier_reseau(reseau)
+
+    if avertissements:
+        print("\nAVERTISSEMENTS (non bloquants) :\n")
+
+        for avertissement in avertissements:
+            print(f"- {avertissement}")
 
     if erreurs:
         print("\nERREURS DE CONFIGURATION :\n")
@@ -336,7 +410,7 @@ def main():
         print(f"\n{len(erreurs)} erreur(s) détectée(s).")
         sys.exit(1)
 
-    print("Configuration réseau valide !")
+    print("\nConfiguration réseau valide !")
     sys.exit(0)
 
 
