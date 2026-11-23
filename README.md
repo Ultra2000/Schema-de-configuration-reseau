@@ -193,11 +193,11 @@ Ces modules sont fournis avec Python : aucune installation, compatibles Windows 
 ## Démarrage
 
 
-### Choix final de l’outil : netlab
+### Choix final de l’outil : netlab [documentation](https://netlab.tools/)
 
 Pour décrire le réseau, nous avons retenu netlab `(version 26.10)`, un outil Python open source qui utilise un format YAML reconnu pour décrire les machines, leurs interfaces, leurs adresses IP et leurs routes. Sa commande `netlab create` lit ce fichier, vérifie une partie de sa cohérence (adresses invalides, adresses de broadcast, IP en double sur un même lien, machines inconnues), puis produit une description complète de chaque équipement. Notre programme part de cette description pour extraire les données, faire les vérifications que netlab ne fait pas et générer le schéma. netlab installe 19 dépendances, mais il est activement maintenu et fonctionne sous Linux comme sous Windows ; nous figeons sa version dans requirements.txt pour éviter les mauvaises surprises.
 
-### Alternative étudiée : nwdiag
+### Alternative étudiée : nwdiag [documentation](http://blockdiag.com/en/nwdiag/)
 
 Nous avons aussi étudié nwdiag, un outil qui génère directement un schéma réseau à partir d’une description texte des réseaux et des adresses IP. Il correspondait bien à notre besoin, mais il n’est plus maintenu : sa dernière version date de décembre 2021. Lors de nos tests avec Python 3.13, il a planté dès la génération de l’image, car il utilise des fonctions supprimées depuis dans ses dépendances (pkg_resources dans setuptools, getsize dans Pillow 10). Le faire fonctionner aurait demandé une ancienne version de Python et des versions figées de ses dépendances, trop contraignant à reproduire sur une autre machine. Nous l’avons donc écarté au profit de netlab.
 
